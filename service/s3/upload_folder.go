@@ -15,12 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-var (
-	localPath string = "master_data/images"
-	bucket    string = "tokkun-test-masterdata"
-	prefix    string = ""
-)
-
 func UploadFolder(localPath string, bucket string, prefix string) error {
 	// caluculate time
 	start := time.Now()
