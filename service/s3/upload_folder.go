@@ -61,7 +61,7 @@ func UploadFolder(localPath string, bucket string, prefix string) error {
 				return
 			}
 			defer file.Close()
-			result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
+			_, err = uploader.Upload(context.TODO(), &s3.PutObjectInput{
 				Bucket: &bucket,
 				Key:    aws.String(filepath.Join(prefix, rel)),
 				Body:   file,
