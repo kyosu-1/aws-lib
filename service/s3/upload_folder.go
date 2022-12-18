@@ -2,25 +2,19 @@ package s3
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
-	"time"
 
+	"golang.org/x/sync/errgroup"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// 並行処理でS3にフォルダの中身をアップロードする
 func UploadFolder(localPath string, bucket string, prefix string) error {
-	// caluculate time
-	start := time.Now()
-	defer func() {
-		fmt.Printf("time: %f[s] \r ", time.Since(start).Seconds())
-	}()
 
 	walker := make(fileWalk)
 	go func() {
@@ -33,26 +27,24 @@ func UploadFolder(localPath string, bucket string, prefix string) error {
 
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		log.Fatalln("error:", err)
+		return err
 	}
 
 	// For each file found walking, upload it to Amazon S3
 	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
 
-	var wg sync.WaitGroup
+	var g errgroup.Group
 
 	for path := range walker {
-		wg.Add(1)
-		go func(path string) {
-			defer wg.Done()
-			rel, err := filepath.Rel(localPath, path)
+		p := path
+		g.Go(func() error {
+			rel, err := filepath.Rel(localPath, p)
 			if err != nil {
-				log.Fatalln("Unable to get relative path:", path, err)
+				return err
 			}
-			file, err := os.Open(path)
+			file, err := os.Open(p)
 			if err != nil {
-				log.Println("Failed opening file", path, err)
-				return
+				return err
 			}
 			defer file.Close()
 			_, err = uploader.Upload(context.TODO(), &s3.PutObjectInput{
@@ -61,12 +53,16 @@ func UploadFolder(localPath string, bucket string, prefix string) error {
 				Body:   file,
 			})
 			if err != nil {
-				log.Fatalln("Failed to upload", path, err)
+				return err
 			}
-		}(path)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
